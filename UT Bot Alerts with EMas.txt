@@ -1,0 +1,75 @@
+//@version=4
+study(title="UT Bot Alerts + EMA Pack (Fixed)", overlay=true)
+
+//────────────────────────────
+// UT BOT ALERTS
+//────────────────────────────
+
+// Inputs
+a = input(1, title="Key Value. 'This changes the sensitivity'")
+c = input(10, title="ATR Period")
+h = input(false, title="Signals from Heikin Ashi Candles")
+
+// ATR calculation
+xATR = atr(c)
+nLoss = a * xATR
+
+// Source
+src = h ? security(heikinashi(syminfo.tickerid), timeframe.period, close, lookahead=false) : close
+
+// ATR Trailing Stop
+xATRTrailingStop = 0.0
+xATRTrailingStop := iff(
+     src > nz(xATRTrailingStop[1], 0) and src[1] > nz(xATRTrailingStop[1], 0),
+     max(nz(xATRTrailingStop[1]), src - nLoss),
+     iff(
+         src < nz(xATRTrailingStop[1], 0) and src[1] < nz(xATRTrailingStop[1], 0),
+         min(nz(xATRTrailingStop[1]), src + nLoss),
+         iff(src > nz(xATRTrailingStop[1], 0), src - nLoss, src + nLoss)
+     )
+ )
+
+// Position
+pos = 0
+pos := iff(src[1] < nz(xATRTrailingStop[1], 0) and src > nz(xATRTrailingStop[1], 0), 1,
+       iff(src[1] > nz(xATRTrailingStop[1], 0) and src < nz(xATRTrailingStop[1], 0), -1, nz(pos[1], 0)))
+
+// EMA (same as original UT Bot)
+emaFast = ema(src, 1)
+above = crossover(emaFast, xATRTrailingStop)
+below = crossover(xATRTrailingStop, emaFast)
+
+// Signals
+buy  = src > xATRTrailingStop and above
+sell = src < xATRTrailingStop and below
+
+barbuy  = src > xATRTrailingStop
+barsell = src < xATRTrailingStop
+
+// Plot Buy / Sell (SINGLE LINE — v4 SAFE)
+plotshape(buy, title="Buy", text="Buy", style=shape.labelup, location=location.belowbar, color=color.green, textcolor=color.white, size=size.tiny)
+plotshape(sell, title="Sell", text="Sell", style=shape.labeldown, location=location.abovebar, color=color.red, textcolor=color.white, size=size.tiny)
+
+// Bar colors
+barcolor(barbuy ? color.green : na)
+barcolor(barsell ? color.red : na)
+
+// Alerts
+alertcondition(buy, title="UT Long", message="UT Long")
+alertcondition(sell, title="UT Short", message="UT Short")
+
+//────────────────────────────
+// EMA + SMA PACK
+//────────────────────────────
+
+// EMA plots
+plot(ema(close, 9),   color=#FF7000, linewidth=1, title="9 EMA")
+plot(ema(close, 21),  color=#0088FA, linewidth=1, title="21 EMA")
+plot(ema(close, 50),  color=#FA00D0, linewidth=1, title="50 EMA")
+plot(ema(close, 200), color=#74ff2e, linewidth=1, title="200 EMA")
+
+// SMA 9
+len1 = input(9, minval=1, title="SMA 9 Length")
+src1 = input(close, title="SMA 9 Source")
+out1 = sma(src1, len1)
+plot(out1, title="SMA 9", color=color.yellow, linewidth=1)
